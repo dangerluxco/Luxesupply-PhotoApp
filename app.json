@@ -1,0 +1,10 @@
+{
+  "ios": {
+    "bundleIdentifier": "com.anonymous.photography-app"
+  },
+  "extra": {
+    "eas": {
+      "projectId": "13163cfa-3648-4bd6-b819-ef48c3656dbb"
+    }
+  }
+}
