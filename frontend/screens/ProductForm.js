@@ -9,9 +9,13 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  Switch
+  Switch,
+  Dimensions
 } from 'react-native';
 import * as FileSystem from 'expo-file-system';
+
+// Get screen dimensions for better positioning
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 // Product categories
 const CATEGORIES = [
@@ -72,26 +76,29 @@ function CustomPicker({ value, onValueChange, items, placeholder }) {
       
       {showOptions && (
         <View style={styles.optionsContainer}>
-          {items.map((item, index) => (
-            <TouchableOpacity
-              key={index}
-              style={[
-                styles.optionItem,
-                value === item && styles.selectedOption
-              ]}
-              onPress={() => {
-                onValueChange(item);
-                setShowOptions(false);
-              }}
-            >
-              <Text style={[
-                styles.optionText,
-                value === item && styles.selectedOptionText
-              ]}>
-                {item}
-              </Text>
-            </TouchableOpacity>
-          ))}
+          <ScrollView style={styles.optionsScroll} showsVerticalScrollIndicator={true}>
+            {items.map((item, index) => (
+              <TouchableOpacity
+                key={index}
+                style={[
+                  styles.optionItem,
+                  value === item && styles.selectedOption,
+                  index === items.length - 1 && styles.lastOptionItem
+                ]}
+                onPress={() => {
+                  onValueChange(item);
+                  setShowOptions(false);
+                }}
+              >
+                <Text style={[
+                  styles.optionText,
+                  value === item && styles.selectedOptionText
+                ]}>
+                  {item}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
         </View>
       )}
     </View>
@@ -270,7 +277,7 @@ export default function ProductForm({ navigation, route }) {
           </Text>
           
           {/* SKU - Required but disabled when editing */}
-          <View style={styles.fieldContainer}>
+          <View style={[styles.fieldContainer, { zIndex: 5 }]}>
             <Text style={styles.label}>SKU <Text style={styles.required}>*</Text></Text>
             <TextInput
               style={[
@@ -288,7 +295,7 @@ export default function ProductForm({ navigation, route }) {
           </View>
 
           {/* Category - Required */}
-          <View style={styles.fieldContainer}>
+          <View style={[styles.fieldContainer, { zIndex: 4 }]}>
             <Text style={styles.label}>Category <Text style={styles.required}>*</Text></Text>
             <CustomPicker
               value={formData.category}
@@ -300,7 +307,7 @@ export default function ProductForm({ navigation, route }) {
           </View>
 
           {/* Brand - Required */}
-          <View style={styles.fieldContainer}>
+          <View style={[styles.fieldContainer, { zIndex: 3 }]}>
             <Text style={styles.label}>Brand <Text style={styles.required}>*</Text></Text>
             <CustomPicker
               value={formData.brand}
@@ -312,7 +319,7 @@ export default function ProductForm({ navigation, route }) {
           </View>
 
           {/* Product Name - Required */}
-          <View style={styles.fieldContainer}>
+          <View style={[styles.fieldContainer, { zIndex: 2 }]}>
             <Text style={styles.label}>Product Name <Text style={styles.required}>*</Text></Text>
             <TextInput
               style={[styles.input, errors.name && styles.inputError]}
@@ -324,7 +331,7 @@ export default function ProductForm({ navigation, route }) {
           </View>
 
           {/* Condition - Optional */}
-          <View style={styles.fieldContainer}>
+          <View style={[styles.fieldContainer, { zIndex: 1 }]}>
             <Text style={styles.label}>Condition</Text>
             <CustomPicker
               value={formData.condition}
@@ -335,7 +342,7 @@ export default function ProductForm({ navigation, route }) {
           </View>
 
           {/* Condition Notes - Optional */}
-          <View style={styles.fieldContainer}>
+          <View style={[styles.fieldContainer, { zIndex: 0 }]}>
             <Text style={styles.label}>Condition Notes</Text>
             <TextInput
               style={[styles.input, styles.textArea]}
@@ -403,7 +410,7 @@ const styles = StyleSheet.create({
   },
   customPickerContainer: {
     position: 'relative',
-    zIndex: 1,
+    zIndex: 2,
     marginBottom: 10,
   },
   pickerButton: {
@@ -431,18 +438,24 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#ddd',
     borderRadius: 8,
-    maxHeight: 200,
-    zIndex: 2,
+    maxHeight: Math.min(SCREEN_HEIGHT * 0.4, 200), // 40% of screen height or 200px, whichever is smaller
+    zIndex: 1,
+    elevation: 3,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
-    elevation: 3,
+  },
+  optionsScroll: {
+    flexGrow: 0,
   },
   optionItem: {
     padding: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
+  },
+  lastOptionItem: {
+    borderBottomWidth: 0,
   },
   selectedOption: {
     backgroundColor: '#e6f2ff',
