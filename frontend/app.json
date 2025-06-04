@@ -1,0 +1,66 @@
+{
+  "expo": {
+    "name": "SKU Photo App",
+    "slug": "photographyapp",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "photographyapp",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": false,
+    "jsEngine": "jsc",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.cameronstorch.photographyapp2023",
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSCameraUsageDescription": "This app uses the camera to take product photos",
+        "NSPhotoLibraryUsageDescription": "This app accesses your photos to save product images",
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "edgeToEdgeEnabled": true,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ],
+      "package": "com.cameronstorch.photographyapp2023",
+      "runtimeVersion": "1.0.0"
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff"
+        }
+      ],
+      "expo-camera"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "1d8a3860-1d0d-4108-83eb-22e3c1e672d9"
+      }
+    },
+    "runtimeVersion": "1.0.0",
+    "updates": {
+      "url": "https://u.expo.dev/1d8a3860-1d0d-4108-83eb-22e3c1e672d9",
+      "enabled": true,
+      "fallbackToCacheTimeout": 0
+    }
+  }
+}

@@ -1,0 +1,80 @@
+{
+  "cli": {
+    "version": ">= 3.11.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "ios": {
+        "resourceClass": "m-medium"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "ios": {
+        "resourceClass": "m-medium"
+      }
+    },
+    "testflight": {
+      "distribution": "store",
+      "ios": {
+        "resourceClass": "m-medium"
+      },
+      "env": {
+        "APP_ENV": "production"
+      }
+    },
+    "testflight-old-arch": {
+      "distribution": "store",
+      "ios": {
+        "resourceClass": "m-medium",
+        "simulator": false,
+        "buildConfiguration": "Release"
+      },
+      "env": {
+        "APP_ENV": "production"
+      },
+      "channel": "testflight",
+      "autoIncrement": true
+    },
+    "testflight-managed": {
+      "distribution": "store",
+      "ios": {
+        "resourceClass": "m-medium",
+        "simulator": false,
+        "buildConfiguration": "Release"
+      },
+      "env": {
+        "APP_ENV": "production"
+      },
+      "channel": "testflight",
+      "autoIncrement": true,
+      "prebuildCommand": "npx expo prebuild --clean --no-install && cd ios && pod install"
+    },
+    "ios-store": {
+      "distribution": "store",
+      "credentialsSource": "remote",
+      "autoIncrement": true,
+      "ios": {
+        "resourceClass": "m-medium"
+      }
+    },
+    "production": {
+      "autoIncrement": true,
+      "ios": {
+        "resourceClass": "m-medium"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "appleId": "cameronstorch@gmail.com",
+        "ascAppId": "6745993131",
+        "appleTeamId": "4F463DFW2P"
+      }
+    }
+  }
+}

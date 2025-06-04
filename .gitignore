@@ -1,3 +1,64 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Testing
+coverage/
+
+# Production
+build/
+dist/
+
+# Misc
+.DS_Store
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env
+.env.*
+!.env.example
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Frontend specific
+frontend/.expo/
+frontend/web-build/
+frontend/dist/
+frontend/*.jks
+frontend/*.p8
+frontend/*.p12
+frontend/*.key
+frontend/*.mobileprovision
+frontend/*.orig.*
+frontend/web-build/
+
+# iOS
+frontend/ios/build/
+frontend/ios/Pods/
+frontend/ios/*.xcworkspace
+frontend/ios/*.xcuserdata
+frontend/ios/*.xccheckout
+frontend/ios/*.xcscmblueprint
+
+# Android
+frontend/android/app/build/
+frontend/android/.gradle
+frontend/android/local.properties
+frontend/android/.idea
+frontend/android/*.iml
+frontend/android/*.hprof
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
 # OSX
 .DS_Store
 
@@ -49,9 +110,6 @@ web-build/
 
 # TypeScript
 *.tsbuildinfo
-
-# Testing
-coverage/
 
 # Visual Studio Code
 .vscode/ 
