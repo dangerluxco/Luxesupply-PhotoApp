@@ -15,6 +15,7 @@ import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { Ionicons } from '@expo/vector-icons';
 import { uploadImageAsync, createUploadFilename } from '../utils/imageUploader';
+import JSZip from 'jszip';
 
 export default function ExportData({ navigation }) {
   const [loading, setLoading] = useState(true);
@@ -23,7 +24,7 @@ export default function ExportData({ navigation }) {
   const [selectAll, setSelectAll] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [includeImages, setIncludeImages] = useState(false);
-  const [exportType, setExportType] = useState('csv'); // 'csv', 'images', 'both'
+  const [exportType, setExportType] = useState('csv'); // 'csv', 'images', 'archive', 'both'
   const [exportProgress, setExportProgress] = useState(0);
   const [exportStatus, setExportStatus] = useState('');
   const [uploadToFirebase, setUploadToFirebase] = useState(false);
@@ -379,6 +380,65 @@ export default function ExportData({ navigation }) {
     }
   };
 
+  // Add new function for creating ZIP archive
+  const createImageArchive = async (selectedSkuData) => {
+    try {
+      const zip = new JSZip();
+      let totalImages = 0;
+      
+      // Process each selected SKU
+      for (const skuData of selectedSkuData) {
+        const { sku, photos } = skuData;
+        const processedDirectory = `${FileSystem.documentDirectory}${sku}/processed/`;
+        const processedDirInfo = await FileSystem.getInfoAsync(processedDirectory);
+        
+        if (processedDirInfo.exists && photos.length > 0) {
+          // Create a folder for each SKU
+          const skuFolder = zip.folder(sku);
+          
+          // Add each photo to the ZIP
+          for (const photo of photos) {
+            const sourcePath = `${processedDirectory}${photo}`;
+            const fileInfo = await FileSystem.getInfoAsync(sourcePath);
+            
+            if (fileInfo.exists) {
+              const imageData = await FileSystem.readAsStringAsync(sourcePath, {
+                encoding: FileSystem.EncodingType.Base64
+              });
+              
+              skuFolder.file(photo, imageData, { base64: true });
+              totalImages++;
+            }
+          }
+        }
+        
+        // Update progress
+        setExportProgress((totalImages / photos.length) * 100);
+      }
+      
+      // Generate the ZIP file with compression
+      const zipContent = await zip.generateAsync({
+        type: 'base64',
+        compression: 'DEFLATE',
+        compressionOptions: {
+          level: 6
+        }
+      });
+      
+      // Save the ZIP file
+      const timestamp = new Date().getTime();
+      const zipPath = `${FileSystem.cacheDirectory}product_images_${timestamp}.zip`;
+      await FileSystem.writeAsStringAsync(zipPath, zipContent, {
+        encoding: FileSystem.EncodingType.Base64
+      });
+      
+      return zipPath;
+    } catch (error) {
+      console.error('Error creating ZIP archive:', error);
+      throw error;
+    }
+  };
+
   // Main export function that handles export without uploading
   const handleExport = async () => {
     try {
@@ -398,177 +458,173 @@ export default function ExportData({ navigation }) {
       // Get selected SKU data
       const selectedSkuData = skus.filter(item => selectedSkus[item.sku]);
       
-      // Create export directory - use FileSystem.cacheDirectory for better sharing support
-      const timestamp = new Date().getTime();
-      const exportDir = `${FileSystem.cacheDirectory}exports_${timestamp}/`;
-      
       try {
+        // Create export directory
+        const timestamp = new Date().getTime();
+        const exportDir = `${FileSystem.cacheDirectory}exports_${timestamp}/`;
+        
         const dirInfo = await FileSystem.getInfoAsync(exportDir);
         
         if (!dirInfo.exists) {
           await FileSystem.makeDirectoryAsync(exportDir, { intermediates: true });
         }
-      } catch (dirError) {
-        console.error("Error creating directory:", dirError);
-        Alert.alert("Error", "Failed to create export directory. Please try again.");
-        setExporting(false);
-        return;
-      }
-      
-      // Main output file path that we'll share at the end
-      let outputFilePath = null;
-      
-      // Export CSV if needed
-      let csvContent = null;
-      if (exportType === 'csv' || exportType === 'both') {
-        setExportStatus('Generating CSV file...');
         
-        try {
-          csvContent = await generateCsv();
-          
-          if (csvContent) {
-            const csvPath = `${exportDir}product_data.csv`;
-            await FileSystem.writeAsStringAsync(csvPath, csvContent);
-            setExportStatus('CSV file created successfully');
-            
-            // If only exporting CSV, this is what we'll share
-            if (exportType === 'csv') {
-              outputFilePath = csvPath;
+        let outputFilePaths = [];
+        
+        // Handle Image Archive export type
+        if (exportType === 'archive') {
+          setExportStatus('Creating ZIP archive...');
+          try {
+            const zipPath = await createImageArchive(selectedSkuData);
+            outputFilePaths.push(zipPath);
+          } catch (archiveError) {
+            console.error("Archive creation error:", archiveError);
+            Alert.alert("Error", "Failed to create image archive. Please try again.");
+            setExporting(false);
+            return;
+          }
+        } else {
+          // Handle other export types
+          if (exportType === 'csv' || exportType === 'both') {
+            // CSV export logic
+            setExportStatus('Generating CSV file...');
+            try {
+              const csvContent = await generateCsv();
+              if (csvContent) {
+                const csvPath = `${exportDir}product_data.csv`;
+                await FileSystem.writeAsStringAsync(csvPath, csvContent);
+                setExportStatus('CSV file created successfully');
+                outputFilePaths.push(csvPath);
+              }
+            } catch (csvError) {
+              console.error("CSV generation error:", csvError);
+              Alert.alert("Warning", "There was an issue generating the CSV file.");
             }
           }
-        } catch (csvError) {
-          console.error("CSV generation error:", csvError);
-          Alert.alert("Warning", "There was an issue generating the CSV file.");
-          // Continue with image export if applicable
-        }
-      }
-      
-      // Export images for local gallery if needed
-      if (exportType === 'images' || exportType === 'both') {
-        setExportStatus('Creating image gallery...');
-        try {
-          const imagesDir = `${exportDir}images/`;
-          const imgDirInfo = await FileSystem.getInfoAsync(imagesDir);
           
-          if (!imgDirInfo.exists) {
-            await FileSystem.makeDirectoryAsync(imagesDir, { intermediates: true });
-          }
-          
-          // Create an HTML index file
-          const htmlPath = `${exportDir}index.html`;
-          let htmlContent = `
-            <!DOCTYPE html>
-            <html>
-            <head>
-              <meta charset="UTF-8">
-              <meta name="viewport" content="width=device-width, initial-scale=1.0">
-              <title>Product Images</title>
-              <style>
-                body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f8f9fa; }
-                h1 { color: #2196F3; }
-                h2 { color: #333; margin-top: 30px; padding-bottom: 10px; border-bottom: 1px solid #ddd; }
-                .sku-container { margin-bottom: 40px; }
-                .image-grid { display: flex; flex-wrap: wrap; gap: 15px; margin-top: 15px; }
-                .image-card { width: 200px; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border-radius: 8px; overflow: hidden; }
-                .image-card img { width: 100%; height: 180px; object-fit: contain; }
-                .image-title { padding: 10px; text-align: center; font-weight: bold; }
-                .firebase-link { padding: 10px; text-align: center; font-size: 12px; }
-                .firebase-link a { color: #2196F3; text-decoration: none; }
-                .firebase-link a:hover { text-decoration: underline; }
-              </style>
-            </head>
-            <body>
-              <h1>Product Image Export</h1>
-          `;
-          
-          const totalSkus = selectedSkuData.length;
-          let processedSkus = 0;
-          let imagesCopied = 0;
-          
-          // Process each selected SKU
-          for (const skuData of selectedSkuData) {
-            const { sku, metadata, photos } = skuData;
-            const processedDirectory = `${FileSystem.documentDirectory}${sku}/processed/`;
-            const processedDirInfo = await FileSystem.getInfoAsync(processedDirectory);
-            
-            setExportStatus(`Adding images for ${sku} to gallery...`);
-            
-            if (processedDirInfo.exists && photos.length > 0) {
-              // Create SKU section in HTML
-              htmlContent += `
-                <div class="sku-container">
-                  <h2>${sku}${metadata && metadata.name ? ` - ${metadata.name}` : ''}</h2>
-                  <div class="image-grid">
-              `;
+          if (exportType === 'images' || exportType === 'both') {
+            // Image gallery export logic
+            setExportStatus('Creating image gallery...');
+            try {
+              const imagesDir = `${exportDir}images/`;
+              const imgDirInfo = await FileSystem.getInfoAsync(imagesDir);
               
-              // Copy each photo to the export directory and add to HTML
-              for (const photo of photos) {
-                try {
-                  const sourcePath = `${processedDirectory}${photo}`;
-                  const destPath = `${imagesDir}${sku}_${photo}`;
-                  
-                  await FileSystem.copyAsync({
-                    from: sourcePath,
-                    to: destPath
-                  });
-                  
-                  imagesCopied++;
-                  
-                  // Add to HTML - if we uploaded to Firebase, include those URLs
-                  const photoType = photo.split('.')[0].replace(/_/g, ' ');
-                  const urlKey = `${sku}_${photoType}`;
-                  
-                  htmlContent += `
-                    <div class="image-card">
-                      <img src="images/${sku}_${photo}" alt="${photoType}">
-                      <div class="image-title">${photoType}</div>
-                      ${imagesUploaded && uploadedImageUrls[urlKey] ? 
-                        `<div class="firebase-link">
-                          <a href="${uploadedImageUrls[urlKey]}" target="_blank">View Online</a>
-                        </div>` : ''}
-                    </div>
-                  `;
-                } catch (copyError) {
-                  console.error(`Error copying image ${photo}:`, copyError);
-                  // Continue with other images
-                }
+              if (!imgDirInfo.exists) {
+                await FileSystem.makeDirectoryAsync(imagesDir, { intermediates: true });
               }
               
+              // Create an HTML index file
+              const htmlPath = `${exportDir}index.html`;
+              let htmlContent = `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                  <meta charset="UTF-8">
+                  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                  <title>Product Images</title>
+                  <style>
+                    body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f8f9fa; }
+                    h1 { color: #2196F3; }
+                    h2 { color: #333; margin-top: 30px; padding-bottom: 10px; border-bottom: 1px solid #ddd; }
+                    .sku-container { margin-bottom: 40px; }
+                    .image-grid { display: flex; flex-wrap: wrap; gap: 15px; margin-top: 15px; }
+                    .image-card { width: 200px; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border-radius: 8px; overflow: hidden; }
+                    .image-card img { width: 100%; height: 180px; object-fit: contain; }
+                    .image-title { padding: 10px; text-align: center; font-weight: bold; }
+                    .firebase-link { padding: 10px; text-align: center; font-size: 12px; }
+                    .firebase-link a { color: #2196F3; text-decoration: none; }
+                    .firebase-link a:hover { text-decoration: underline; }
+                  </style>
+                </head>
+                <body>
+                  <h1>Product Image Export</h1>
+              `;
+              
+              // Process each selected SKU
+              const totalSkus = selectedSkuData.length;
+              let processedSkus = 0;
+              let imagesCopied = 0;
+              
+              for (const skuData of selectedSkuData) {
+                const { sku, metadata, photos } = skuData;
+                const processedDirectory = `${FileSystem.documentDirectory}${sku}/processed/`;
+                const processedDirInfo = await FileSystem.getInfoAsync(processedDirectory);
+                
+                setExportStatus(`Adding images for ${sku} to gallery...`);
+                
+                if (processedDirInfo.exists && photos.length > 0) {
+                  // Create SKU section in HTML
+                  htmlContent += `
+                    <div class="sku-container">
+                      <h2>${sku}${metadata && metadata.name ? ` - ${metadata.name}` : ''}</h2>
+                      <div class="image-grid">
+                  `;
+                  
+                  // Copy each photo to the export directory and add to HTML
+                  for (const photo of photos) {
+                    try {
+                      const sourcePath = `${processedDirectory}${photo}`;
+                      const destPath = `${imagesDir}${sku}_${photo}`;
+                      
+                      await FileSystem.copyAsync({
+                        from: sourcePath,
+                        to: destPath
+                      });
+                      
+                      imagesCopied++;
+                      
+                      // Add to HTML - if we uploaded to Firebase, include those URLs
+                      const photoType = photo.split('.')[0].replace(/_/g, ' ');
+                      const urlKey = `${sku}_${photoType}`;
+                      
+                      htmlContent += `
+                        <div class="image-card">
+                          <img src="images/${sku}_${photo}" alt="${photoType}">
+                          <div class="image-title">${photoType}</div>
+                          ${imagesUploaded && uploadedImageUrls[urlKey] ? 
+                            `<div class="firebase-link">
+                              <a href="${uploadedImageUrls[urlKey]}" target="_blank">View Online</a>
+                            </div>` : ''}
+                        </div>
+                      `;
+                    } catch (copyError) {
+                      console.error(`Error copying image ${photo}:`, copyError);
+                      // Continue with other images
+                    }
+                  }
+                  
+                  htmlContent += `
+                      </div>
+                    </div>
+                  `;
+                }
+                
+                processedSkus++;
+                setExportProgress((processedSkus / totalSkus) * 100);
+              }
+              
+              // Close HTML
               htmlContent += `
                   </div>
-                </div>
+                </body>
+                </html>
               `;
+              
+              // Save HTML index
+              await FileSystem.writeAsStringAsync(htmlPath, htmlContent);
+              setExportStatus('Image gallery created successfully');
+              
+              outputFilePaths.push(htmlPath);
+            } catch (imageError) {
+              console.error("Image export error:", imageError);
+              Alert.alert("Warning", "There was an issue exporting the images.");
             }
-            
-            processedSkus++;
-            setExportProgress((processedSkus / totalSkus) * 100);
           }
-          
-          // Close HTML
-          htmlContent += `
-              <div style="margin-top: 40px; text-align: center; color: #666; font-size: 14px;">
-                Exported ${imagesCopied} images from ${processedSkus} products on ${new Date().toLocaleString()}
-                ${imagesUploaded ? '<br><strong>Images also uploaded to Firebase Storage</strong>' : ''}
-              </div>
-            </body>
-            </html>
-          `;
-          
-          // Save HTML index
-          await FileSystem.writeAsStringAsync(htmlPath, htmlContent);
-          setExportStatus('Image gallery created successfully');
-          
-          // Set this as our output file for sharing
-          outputFilePath = htmlPath;
-        } catch (imageError) {
-          console.error("Image export error:", imageError);
-          Alert.alert("Warning", "There was an issue exporting the images.");
         }
-      }
-      
-      // Create README.txt
-      try {
-        const readmeContent = `
+        
+        // Create README.txt
+        try {
+          const readmeContent = `
 Product Export
 =============
 Created: ${new Date().toLocaleString()}
@@ -582,25 +638,29 @@ File naming convention for images:
 SKU_ANGLE.png (e.g., LV12345_front.png)
 
 ${imagesUploaded ? 'Images have been uploaded to Firebase Storage and URLs are included in the CSV file and HTML gallery.' : ''}
-        `;
-        
-        await FileSystem.writeAsStringAsync(`${exportDir}README.txt`, readmeContent);
-      } catch (readmeError) {
-        console.error("Error creating README:", readmeError);
-        // Continue, this is not critical
-      }
-      
-      // Share the export 
-      if (outputFilePath) {
-        try {
-          const fileInfo = await FileSystem.getInfoAsync(outputFilePath);
+          `;
           
-          if (fileInfo.exists) {
+          await FileSystem.writeAsStringAsync(`${exportDir}README.txt`, readmeContent);
+        } catch (readmeError) {
+          console.error("Error creating README:", readmeError);
+          // Continue, this is not critical
+        }
+        
+        // Share the export(s)
+        if (outputFilePaths.length > 0) {
+          try {
             if (await Sharing.isAvailableAsync()) {
-              await Sharing.shareAsync(outputFilePath, {
-                UTI: exportType === 'csv' ? 'public.comma-separated-values-text' : 'public.html',
-                mimeType: exportType === 'csv' ? 'text/csv' : 'text/html'
-              });
+              const fileInfo = await FileSystem.getInfoAsync(outputFilePaths[0]);
+              
+              if (fileInfo.exists) {
+                // Determine the correct mime type and UTI based on export type
+                const isZip = outputFilePaths[0].endsWith('.zip');
+                await Sharing.shareAsync(outputFilePaths[0], {
+                  UTI: isZip ? 'public.zip-archive' : (exportType === 'csv' ? 'public.comma-separated-values-text' : 'public.html'),
+                  mimeType: isZip ? 'application/zip' : (exportType === 'csv' ? 'text/csv' : 'text/html'),
+                  dialogTitle: 'Export Product Data'
+                });
+              }
             } else {
               Alert.alert(
                 "Export Complete", 
@@ -608,31 +668,32 @@ ${imagesUploaded ? 'Images have been uploaded to Firebase Storage and URLs are i
                 [{ text: "OK" }]
               );
             }
-          } else {
-            throw new Error("Output file doesn't exist");
+          } catch (shareError) {
+            console.error("Sharing error:", shareError);
+            Alert.alert(
+              "Sharing Failed",
+              "Could not share the exported files. They have been saved to your device.",
+              [{ text: "OK" }]
+            );
           }
-        } catch (shareError) {
-          console.error("Sharing error:", shareError);
+        } else {
           Alert.alert(
-            "Sharing Failed",
-            "Could not share the exported files. They have been saved to your device at: " + exportDir,
+            "Export Warning", 
+            "The export completed but no files were available to share. Please try a different export option.",
             [{ text: "OK" }]
           );
         }
-      } else {
+        
+        // Final success message
         Alert.alert(
-          "Export Warning", 
-          "The export completed but no files were available to share. Please try a different export option.",
+          "Export Complete", 
+          `Successfully exported data for ${selectedSkuData.length} products`,
           [{ text: "OK" }]
         );
+      } catch (innerError) {
+        console.error("Error during export process:", innerError);
+        Alert.alert("Export Error", "Failed to process export: " + innerError.message);
       }
-      
-      // Final success message
-      Alert.alert(
-        "Export Complete", 
-        `Successfully exported data for ${selectedSkuData.length} products${imagesUploaded ? ' with Firebase image URLs' : ''}`,
-        [{ text: "OK" }]
-      );
     } catch (error) {
       console.error("Error during export:", error);
       Alert.alert("Export Error", "Failed to export data: " + error.message);
@@ -640,9 +701,8 @@ ${imagesUploaded ? 'Images have been uploaded to Firebase Storage and URLs are i
       setExporting(false);
       setExportProgress(0);
       setExportStatus('');
-      setCurrentUploadProgress(0);
     }
-  };
+  }
 
   // Render a single SKU item
   const renderSkuItem = ({ item }) => {
@@ -756,7 +816,7 @@ ${imagesUploaded ? 'Images have been uploaded to Firebase Storage and URLs are i
           />
         </View>
         
-        <View style={styles.optionRow}>
+        <View style={styles.exportTypeRow}>
           <Text style={styles.optionLabel}>Export Type</Text>
           <View style={styles.segmentControl}>
             <TouchableOpacity
@@ -789,7 +849,23 @@ ${imagesUploaded ? 'Images have been uploaded to Firebase Storage and URLs are i
                   exportType === 'images' && styles.segmentButtonTextActive
                 ]}
               >
-                Images Only
+                Image Gallery Only
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.segmentButton,
+                exportType === 'archive' && styles.segmentButtonActive,
+              ]}
+              onPress={() => setExportType('archive')}
+            >
+              <Text 
+                style={[
+                  styles.segmentButtonText,
+                  exportType === 'archive' && styles.segmentButtonTextActive
+                ]}
+              >
+                Image Archive Only
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -813,7 +889,7 @@ ${imagesUploaded ? 'Images have been uploaded to Firebase Storage and URLs are i
         </View>
         
         {(exportType === 'csv' || exportType === 'both') && (
-          <View style={styles.optionRow}>
+          <View style={styles.switchRow}>
             <Text style={styles.optionLabel}>Include Image Paths in CSV</Text>
             <Switch
               value={includeImages}
@@ -868,7 +944,7 @@ ${imagesUploaded ? 'Images have been uploaded to Firebase Storage and URLs are i
           >
             <Ionicons name="download-outline" size={20} color="#fff" />
             <Text style={styles.exportButtonText}>
-              Export {exportType === 'csv' ? 'CSV' : exportType === 'images' ? 'Images' : 'Data'}
+              Export {exportType === 'csv' ? 'CSV' : exportType === 'images' ? 'Images' : exportType === 'archive' ? 'Archive' : 'Data'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -941,32 +1017,49 @@ const styles = StyleSheet.create({
     borderBottomColor: '#eee',
   },
   optionRow: {
+    marginVertical: 8,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 10,
+  },
+  switchRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 6,
   },
   optionLabel: {
     fontSize: 16,
     color: '#333',
+    marginBottom: 8,
+  },
+  exportTypeRow: {
+    marginTop: 4,
+    marginBottom: 12,
   },
   segmentControl: {
     flexDirection: 'row',
     borderWidth: 1,
     borderColor: '#2196F3',
     borderRadius: 6,
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    width: '100%',
   },
   segmentButton: {
     paddingVertical: 6,
-    paddingHorizontal: 12,
+    paddingHorizontal: 8,
     backgroundColor: 'white',
+    minWidth: '45%',
+    marginVertical: 2,
   },
   segmentButtonActive: {
     backgroundColor: '#2196F3',
   },
   segmentButtonText: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#2196F3',
+    textAlign: 'center',
   },
   segmentButtonTextActive: {
     color: 'white',

@@ -60,13 +60,16 @@ const CONDITIONS = [
 ];
 
 // Simple custom picker component since @react-native-picker/picker was causing issues
-function CustomPicker({ value, onValueChange, items, placeholder }) {
+function CustomPicker({ value, onValueChange, items, placeholder, error }) {
   const [showOptions, setShowOptions] = useState(false);
   
   return (
     <View style={styles.customPickerContainer}>
       <TouchableOpacity 
-        style={styles.pickerButton}
+        style={[
+          styles.pickerButton,
+          error && styles.inputError
+        ]}
         onPress={() => setShowOptions(!showOptions)}
       >
         <Text style={value ? styles.pickerValue : styles.pickerPlaceholder}>
@@ -101,6 +104,7 @@ function CustomPicker({ value, onValueChange, items, placeholder }) {
           </ScrollView>
         </View>
       )}
+      {error && <Text style={styles.errorText}>{error}</Text>}
     </View>
   );
 }
@@ -114,7 +118,12 @@ export default function ProductForm({ navigation, route }) {
     conditionNotes: '',
     sku: '',
   });
-  const [errors, setErrors] = useState({});
+  const [errors, setErrors] = useState({
+    category: '',
+    brand: '',
+    name: '',
+    sku: '',
+  });
   const [isEditing, setIsEditing] = useState(false);
 
   // Initialize form with route params
@@ -282,7 +291,7 @@ export default function ProductForm({ navigation, route }) {
             <TextInput
               style={[
                 styles.input, 
-                errors.sku && styles.inputError,
+                errors.sku ? styles.inputError : null,
                 isEditing && styles.disabledInput
               ]}
               value={formData.sku}
@@ -291,7 +300,7 @@ export default function ProductForm({ navigation, route }) {
               autoCapitalize="characters"
               editable={!isEditing}
             />
-            {errors.sku && <Text style={styles.errorText}>{errors.sku}</Text>}
+            {errors.sku ? <Text style={styles.errorText}>{errors.sku}</Text> : null}
           </View>
 
           {/* Category - Required */}
@@ -302,8 +311,8 @@ export default function ProductForm({ navigation, route }) {
               onValueChange={(value) => updateField('category', value)}
               items={CATEGORIES}
               placeholder="Select a category..."
+              error={errors.category}
             />
-            {errors.category && <Text style={styles.errorText}>{errors.category}</Text>}
           </View>
 
           {/* Brand - Required */}
@@ -314,20 +323,20 @@ export default function ProductForm({ navigation, route }) {
               onValueChange={(value) => updateField('brand', value)}
               items={BRANDS}
               placeholder="Select a brand..."
+              error={errors.brand}
             />
-            {errors.brand && <Text style={styles.errorText}>{errors.brand}</Text>}
           </View>
 
           {/* Product Name - Required */}
           <View style={[styles.fieldContainer, { zIndex: 2 }]}>
             <Text style={styles.label}>Product Name <Text style={styles.required}>*</Text></Text>
             <TextInput
-              style={[styles.input, errors.name && styles.inputError]}
+              style={[styles.input, errors.name ? styles.inputError : null]}
               value={formData.name}
               onChangeText={(value) => updateField('name', value)}
               placeholder="Enter product name"
             />
-            {errors.name && <Text style={styles.errorText}>{errors.name}</Text>}
+            {errors.name ? <Text style={styles.errorText}>{errors.name}</Text> : null}
           </View>
 
           {/* Condition - Optional */}
