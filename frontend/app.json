@@ -11,7 +11,7 @@
     "jsEngine": "jsc",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.cameronstorch.photographyapp2023",
+      "bundleIdentifier": "com.howcouldyouforget.photographyapp",
       "buildNumber": "1",
       "infoPlist": {
         "NSCameraUsageDescription": "This app uses the camera to take product photos",
@@ -31,7 +31,7 @@
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO"
       ],
-      "package": "com.cameronstorch.photographyapp2023",
+      "package": "com.howcouldyouforget.photographyapp",
       "runtimeVersion": "1.0.0"
     },
     "web": {
